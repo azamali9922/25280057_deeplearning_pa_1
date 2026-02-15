@@ -1,0 +1,30 @@
+# --- Virtual Environment ---
+# Specific name you used
+ai600_env/
+
+# Standard venv names (just in case)
+venv/
+env/
+.env
+.venv/
+
+# --- Python ---
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# --- Jupyter Notebooks ---
+.ipynb_checkpoints
+*/.ipynb_checkpoints/*
+
+# --- Datasets ---
+# It is best practice NOT to upload large datasets to GitHub
+# (You should document where to download them in your README)
+*.csv
+*.zip
+
+# --- OS Generated Files ---
+.DS_Store
+Thumbs.db
