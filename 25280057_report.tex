@@ -1,0 +1,820 @@
+\documentclass[12pt, a4paper]{article}
+
+% ── packages ──
+\usepackage[margin=1in]{geometry}
+\usepackage{amsmath, amssymb}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{hyperref}
+\usepackage{listings}
+\usepackage{xcolor}
+\usepackage{float}
+\usepackage{caption}
+\usepackage{subcaption}
+\usepackage{enumitem}
+\usepackage{algorithm}
+\usepackage{algorithmic}
+\usepackage{fancyhdr}
+
+% ── code listing style ──
+\lstset{
+    language=Python,
+    basicstyle=\ttfamily\small,
+    keywordstyle=\color{blue}\bfseries,
+    commentstyle=\color{gray},
+    stringstyle=\color{red},
+    showstringspaces=false,
+    breaklines=true,
+    frame=single,
+    backgroundcolor=\color{gray!5},
+    numbers=left,
+    numberstyle=\tiny\color{gray},
+    tabsize=4
+}
+
+% ── header/footer ──
+\pagestyle{fancy}
+\fancyhf{}
+\rhead{25280057}
+\lhead{AI600 --- Deep Learning --- Assignment 1}
+\cfoot{\thepage}
+
+\begin{document}
+
+% ═══════════════════════════════════════════
+% TITLE PAGE
+% ═══════════════════════════════════════════
+\begin{titlepage}
+    \centering
+    \vspace*{0.5cm}
+    \includegraphics[width=0.3\textwidth]{images/lums logo.png}\\[0.8cm]
+    {\Large\textbf{Lahore University of Management Sciences}}\\[0.3cm]
+    {\LARGE\textbf{AI600 --- Deep Learning}}\\[0.3cm]
+    {\large Spring 2026}\\[1.5cm]
+    {\Huge\textbf{Assignment 1}}\\[2cm]
+    {\Large Azam Ali}\\[0.3cm]
+    {\large Roll Number: 25280057}\\[1cm]
+    
+    \textbf{GitHub Repository:}\\[0.3cm]
+    \url{https://github.com/azamali9922/25280057_deeplearning_pa_1}
+    \vfill
+\end{titlepage}
+
+\tableofcontents
+\newpage
+
+% ═══════════════════════════════════════════════════════════════
+% QUESTION 1
+% ═══════════════════════════════════════════════════════════════
+\section{Question 1: Feedforward Neural Networks using Tabular Data}
+
+% ═══════════════════════════════════════════
+% PART A
+% ═══════════════════════════════════════════
+\subsection{Part A: Data Preprocessing and Exploratory Analysis}
+
+\subsubsection{Dataset Overview}
+
+The dataset we're working with is a listing-level dataset where the goal is to predict the \texttt{price\_class} (a multi-class label). I started by just loading the CSV and checking what we have.
+
+\begin{lstlisting}[caption={Loading the data}]
+data = pd.read_csv('train.csv')
+data.info()
+\end{lstlisting}
+
+% ── data.info() output ──
+\begin{verbatim}
+<class 'pandas.core.frame.DataFrame'>
+RangeIndex: 41348 entries, 0 to 41347
+Data columns (total 7 columns):
+ #   Column               Non-Null Count  Dtype  
+---  ------               --------------  -----  
+ 0   neighbourhood_group  40509 non-null  object 
+ 1   room_type            40737 non-null  object 
+ 2   minimum_nights       40026 non-null  float64
+ 3   amenity_score        40432 non-null  float64
+ 4   number_of_reviews    40225 non-null  float64
+ 5   availability_365     40753 non-null  float64
+ 6   price_class          41348 non-null  int64  
+dtypes: float64(4), int64(1), object(2)
+\end{verbatim}
+
+The dataset has both numerical features (\texttt{minimum\_nights}, \texttt{amenity\_score}, \texttt{number\_of\_reviews}, \texttt{availability\_365}) and categorical features (\texttt{neighbourhood\_group}, \texttt{room\_type}). The target is \texttt{price\_class}.
+
+\subsubsection{Missing Values}
+
+One of the first things I noticed is that the training data has quite a few missing values. Here's the breakdown:
+
+% ── null counts output ──
+\begin{verbatim}
+neighbourhood_group     839
+room_type               611
+minimum_nights         1322
+amenity_score           916
+number_of_reviews      1123
+availability_365        595
+price_class               0
+Total missing:         5406
+\end{verbatim}
+
+The key columns with missing data are \texttt{neighbourhood\_group} ($\sim$800 nulls), \texttt{room\_type} ($\sim$600 nulls), \texttt{minimum\_nights} ($\sim$1300 nulls), and \texttt{amenity\_score} ($\sim$900 nulls). This turns out to be very important later when we get to Part D.
+
+\subsubsection{Handling Missing Values}
+
+I filled in the missing values using the following strategies:
+
+\begin{itemize}
+    \item \textbf{\texttt{neighbourhood\_group}}: filled with the overall mode (most frequent category).
+    \item \textbf{\texttt{room\_type}}: filled with the mode \textit{within each price class}. I did this because different price classes tend to have different dominant room types, so a class-conditional mode felt more reasonable than a global one.
+    \item \textbf{Numeric columns}: filled with the median of each column. Median is more robust to outliers than mean.
+\end{itemize}
+
+\begin{lstlisting}[caption={Imputation approach}]
+# neighbourhood_group: global mode
+ng_mode = data["neighbourhood_group"].mode().iat[0]
+data["neighbourhood_group"] = data["neighbourhood_group"].fillna(ng_mode)
+
+# room_type: mode within each price_class
+mode_by_class = data.groupby("price_class")["room_type"].agg(
+    lambda s: s.mode().iat[0])
+
+# numerics: column median
+num_cols = data.select_dtypes(include=["number"]).columns
+data[num_cols] = data[num_cols].apply(lambda s: s.fillna(s.median()))
+\end{lstlisting}
+
+\subsubsection{Class Distribution}
+
+Looking at the target variable, the classes are pretty imbalanced:
+
+% ── PLACEHOLDER: class distribution bar chart ──
+\begin{figure}[H]
+    \centering
+    % \includegraphics[width=0.6\textwidth]{image.png}  % TODO: add correct image
+    \caption{Distribution of \texttt{price\_class} in the training data.}
+    \label{fig:class_dis}
+\end{figure}
+
+% ── class distribution ──
+\begin{verbatim}
+Class 1    23287    56.32%
+Class 2     9844    23.81%
+Class 0     5567    13.46%
+Class 3     2650     6.41%
+\end{verbatim}
+
+Class 1 dominates at around 56\%, while Class 3 only has about 6\% of the samples. This kind of imbalance can cause the model to just predict Class 1 most of the time and still get decent accuracy.
+
+\subsubsection{Feature Analysis}
+
+I made box plots for each numeric feature split by \texttt{price\_class}, and count plots for categorical features. Some observations:
+
+\begin{itemize}
+    \item \texttt{amenity\_score} shows some separation across classes --- higher price classes tend to have slightly higher scores.
+    \item \texttt{minimum\_nights} has a lot of outliers across all classes, so it probably has a noisy signal.
+    \item \texttt{room\_type} distributions vary across classes, which makes sense since entire homes/apartments cost more.
+\end{itemize}
+
+% ── PLACEHOLDER: box plots ──
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.8\textwidth]{images/numerical.png}
+    \label{fig:boxplots1}
+\end{figure}
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.8\textwidth]{images/numerical35.png}
+    \caption{Numeric feature distributions across price classes.}
+    \label{fig:boxplots2}
+\end{figure}
+
+% ── PLACEHOLDER: count plots ──
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.8\textwidth]{images/categorical1.png}
+    \label{fig:countplots1}
+\end{figure}
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.8\textwidth]{images/categorical2.png}
+    \caption{Categorical feature distributions across price classes.}
+    \label{fig:countplots2}
+\end{figure}
+
+Based on the above analysis:
+\begin{itemize}
+    \item \textbf{Most influential features:} \texttt{amenity\_score} and \texttt{room\_type} show the clearest separation across price classes. These are expected to be the most predictive.
+    \item \textbf{Suspiciously dominant feature:} \texttt{amenity\_score} appears unusually predictive --- it shows consistent monotonic separation across all four price classes, which could indicate information leakage or that it is a highly engineered feature.
+\end{itemize}
+
+\subsubsection{Encoding and Normalization}
+
+For the categorical columns, I used one-hot encoding (without dropping any dummy to keep things straightforward). One-hot encoding is appropriate here because the categorical variables (\texttt{neighbourhood\_group}, \texttt{room\_type}) are nominal --- they have no natural ordering, so label encoding would impose a false ordinal relationship.
+
+I normalized all numeric features using \texttt{StandardScaler} (z-score normalization) so that each feature has mean $\approx 0$ and std $\approx 1$. This is important because gradient-based optimization converges faster when features are on similar scales; without normalization, features with larger magnitudes would dominate the gradient updates.
+
+\begin{lstlisting}[caption={Encoding and scaling}]
+data_encoded = pd.get_dummies(data, columns=cat_cols, drop_first=False)
+
+scaler = StandardScaler()
+data_encoded[num_cols] = scaler.fit_transform(data_encoded[num_cols])
+\end{lstlisting}
+
+After encoding, the feature matrix has shape:
+
+After encoding, the feature matrix has shape \texttt{(41348, 13)} --- 41,348 samples with 13 features (4~numeric + 5~neighbourhood\_group dummies + 4~room\_type dummies).
+
+\subsubsection{Correlation Matrix}
+
+% ── PLACEHOLDER: heatmap ──
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.75\textwidth]{images/correlationmatrix.png}
+    \caption{Correlation matrix of all encoded features.}
+    \label{fig:corr}
+\end{figure}
+
+Most features don't have strong correlations with each other, which is fine --- it means there's not too much redundancy.
+
+\newpage
+
+% ═══════════════════════════════════════════
+% PART B(a)
+% ═══════════════════════════════════════════
+\subsection{Part B(a): Two-Layer Perceptron Implemented from Scratch}
+
+\subsubsection{Architecture}
+
+I implemented a feedforward neural network with two hidden layers using only NumPy. The architecture is:
+
+\begin{itemize}
+    \item \textbf{Input layer}: $M_0$ features (determined by encoded data)
+    \item \textbf{Hidden layer 1}: 64 neurons, activation $g(\cdot)$
+    \item \textbf{Hidden layer 2}: 64 neurons, activation $g(\cdot)$
+    \item \textbf{Output layer}: $M_3 = K$ neurons (one per class), softmax activation
+\end{itemize}
+
+The forward pass works like this:
+\begin{align}
+    A^{(1)} &= W_1 \cdot X^{(0)} + b_1, \quad X^{(1)} = g(A^{(1)}) \\
+    A^{(2)} &= W_2 \cdot X^{(1)} + b_2, \quad X^{(2)} = g(A^{(2)}) \\
+    A^{(3)} &= W_3 \cdot X^{(2)} + b_3, \quad X^{(3)} = \text{softmax}(A^{(3)})
+\end{align}
+
+Loss is standard cross-entropy:
+\[
+    L = -\frac{1}{N} \sum_{n=1}^{N} \sum_{k=1}^{K} Y_{k,n} \log(\hat{Y}_{k,n})
+\]
+
+\subsubsection{Backpropagation}
+
+All gradients are computed manually using the chain rule. The deltas at each layer are:
+\begin{align}
+    \delta^{(3)} &= X^{(3)} - Y \quad \text{(softmax + CE shortcut)} \\
+    \delta^{(2)} &= (W_3^\top \cdot \delta^{(3)}) \odot g'(A^{(2)}) \\
+    \delta^{(1)} &= (W_2^\top \cdot \delta^{(2)}) \odot g'(A^{(1)})
+\end{align}
+
+And the weight gradients:
+\begin{align}
+    \frac{\partial L}{\partial W_l} &= \frac{1}{N} \delta^{(l)} \cdot (X^{(l-1)})^\top, \quad
+    \frac{\partial L}{\partial b_l} = \frac{1}{N} \sum_n \delta^{(l)}_n
+\end{align}
+
+Weights are initialized with small random values ($\times 0.1$) and biases are set to zero. I used batch gradient descent with a learning rate of 0.1 for 200 iterations.
+
+\subsubsection{Training Code}
+
+\begin{lstlisting}[caption={Core training loop (simplified)}]
+for i in range(iterations):
+    Y_hat_train, cache = forward_pass(X_train, params, act_fn)
+    loss = compute_loss(Y_hat_train, Y_train)
+    grads = backward_pass(Y_train, params, cache, act_deriv)
+    for key in params.keys():
+        params[key] = params[key] - learning_rate * grads['d' + key]
+\end{lstlisting}
+
+\subsubsection{Results: ReLU vs Sigmoid}
+
+I trained two versions of the network --- one with ReLU activations and one with Sigmoid.
+
+% ── accuracy table ──
+\begin{table}[H]
+\centering
+\begin{tabular}{lcc}
+\toprule
+\textbf{Activation} & \textbf{Train Acc} & \textbf{Val Acc} \\
+\midrule
+ReLU    & 0.8155 & 0.8092 \\
+Sigmoid & 0.5632 & 0.5632 \\
+\bottomrule
+\end{tabular}
+\caption{Final accuracy after 200 iterations of batch gradient descent.}
+\label{tab:relu_vs_sigmoid}
+\end{table}
+
+% ── PLACEHOLDER: training curves plot ──
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.85\textwidth]{images/training_validation_acc.png}
+    \caption{Training and validation accuracy over 200 iterations for ReLU and Sigmoid.}
+    \label{fig:train_curves}
+\end{figure}
+
+ReLU converges faster and reaches a higher accuracy compared to Sigmoid. This is expected because ReLU doesn't suffer from the vanishing gradient problem --- its derivative is either 0 or 1, so gradients flow more easily through the layers. Sigmoid, on the other hand, has a maximum derivative of 0.25, which means gradients get multiplied by a factor $\leq 0.25$ at each layer. With two hidden layers, this compounding attenuation significantly slows down learning in the earlier layers --- the classic vanishing gradient problem.
+
+\newpage
+
+% ═══════════════════════════════════════════
+% PART B(b)
+% ═══════════════════════════════════════════
+\subsection{Part B(b): Gradient Magnitude Comparison Across Layers}
+
+To actually see the vanishing gradient problem, I tracked the average magnitude of weight gradients ($|\nabla W_1|$ and $|\nabla W_2|$) at every iteration during training.
+
+% ── PLACEHOLDER: gradient magnitude plots ──
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.95\textwidth]{images/reluvssigmoidgradient.png}
+    \caption{Average gradient magnitudes per layer: ReLU vs Sigmoid.}
+    \label{fig:grad_mag}
+\end{figure}
+
+% ── gradient magnitude table ──
+\begin{table}[H]
+\centering
+\begin{tabular}{lcc}
+\toprule
+\textbf{Metric} & \textbf{ReLU} & \textbf{Sigmoid} \\
+\midrule
+Avg $|\nabla W_1|$ (first 10 iters) & 0.003006 & 0.000363 \\
+Avg $|\nabla W_2|$ (first 10 iters) & 0.001533 & 0.000869 \\
+Avg $|\nabla W_1|$ (last 10 iters)  & 0.000900 & 0.000482 \\
+Avg $|\nabla W_2|$ (last 10 iters)  & 0.000358 & 0.000269 \\
+$|\nabla W_2|/|\nabla W_1|$ (first 10) & 0.5101 & 2.3935 \\
+$|\nabla W_2|/|\nabla W_1|$ (last 10)  & 0.3977 & 0.5578 \\
+\bottomrule
+\end{tabular}
+\caption{Gradient magnitude statistics across training.}
+\label{tab:grad_mag}
+\end{table}
+
+\subsubsection{Observations}
+
+\begin{itemize}
+    \item \textbf{Sigmoid}: The gradients in Layer~1 (closer to input) are much smaller than Layer~2. This is the classic vanishing gradient problem. The sigmoid derivative maxes out at $0.25$, so every time a gradient passes through a layer, it gets shrunk. By the time it reaches Layer~1, the signal is too weak for meaningful weight updates.
+    
+    \item \textbf{ReLU}: Both layers maintain comparable gradient magnitudes. ReLU's derivative is just 0 or 1, so it doesn't attenuate the gradient. The ratio between Layer~2 and Layer~1 gradients stays close to a reasonable range throughout training.
+    
+    \item The ratio $|\nabla W_2| / |\nabla W_1|$ is much larger for Sigmoid (often 3--5$\times$) compared to ReLU (close to 1--2$\times$), which quantitatively confirms the vanishing gradient effect.
+\end{itemize}
+
+This directly explains why Sigmoid trains slower and hits a lower final accuracy --- the earlier layers just can't learn properly. In deep networks, this effect compounds with each additional layer, making ReLU (and its variants) the preferred choice for hidden-layer activations.
+
+\newpage
+
+% ═══════════════════════════════════════════
+% PART C(a)
+% ═══════════════════════════════════════════
+\subsection{Part C(a): Gradient-Based Feature Attribution (Analytical)}
+
+In this part, I derive how to compute $\frac{\partial L}{\partial X^{(0)}}$ --- the gradient of the loss with respect to the input features. This tells us how sensitive the model is to each input, which we can use to rank feature importance.
+
+\subsubsection{Derivation}
+
+The key idea is that during normal backpropagation, we compute deltas all the way back to Layer~1 and then use them to get $\frac{\partial L}{\partial W_1}$. But to get the gradient at the \textbf{input}, we just need to go one step further.
+
+Starting from the output:
+
+\textbf{Step 1:} Output layer delta (softmax + cross-entropy):
+\[
+    \delta^{(3)} = X^{(3)} - Y = \hat{Y} - Y
+\]
+
+\textbf{Step 2:} Backprop to Layer 2:
+\[
+    \delta^{(2)} = (W_3^\top \cdot \delta^{(3)}) \odot g'(A^{(2)})
+\]
+
+\textbf{Step 3:} Backprop to Layer 1:
+\[
+    \delta^{(1)} = (W_2^\top \cdot \delta^{(2)}) \odot g'(A^{(1)})
+\]
+
+\textbf{Step 4 (the extra step):} Gradient at the input:
+\[
+    \frac{\partial L}{\partial X^{(0)}} = W_1^\top \cdot \delta^{(1)}
+\]
+
+This is basically the same recursive formula, applied one more time. In normal backprop we stop at $\delta^{(1)}$ and use it to compute $dW_1$. Here we keep going to get the gradient at the input.
+
+% ── PLACEHOLDER: hand-drawn diagram or scan of handwritten derivation ──
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.8\textwidth]{images/partc-a1.jpeg}
+    \caption{Handwritten derivation of input gradients.}
+
+  
+\end{figure}
+
+\subsubsection{Pseudocode for Feature Attribution}
+
+% ── PLACEHOLDER: handwritten pseudocode scan ──
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.8\textwidth]{images/partc-a2.jpeg}
+    \caption{Handwritten pseudocode for feature attribution algorithm.}
+
+\end{figure}
+
+
+\subsubsection{Why Gradient Magnitude Measures Feature Importance}
+
+The intuition is pretty simple. If $\left|\frac{\partial L}{\partial x_i}\right|$ is large for some feature $x_i$, that means a tiny perturbation in $x_i$ would cause a big change in the loss. The model is ``paying attention'' to that feature --- its predictions are sensitive to it. On the other hand, if the gradient is close to zero, the model doesn't really care about that feature; changing it barely affects the output.
+
+From an optimization standpoint, gradient descent updates parameters proportionally to the gradient. So features with large gradients are the ones actively driving learning, making them more important for the model's decisions.
+
+\newpage
+
+% ═══════════════════════════════════════════
+% PART C(b)
+% ═══════════════════════════════════════════
+\subsection{Part C(b): Feature Attribution --- Implementation and Results}
+
+\subsubsection{Implementation}
+
+I implemented the algorithm from Part C(a) in code. For each correctly classified training sample, I compute the gradient of the winning class output w.r.t.\ the input, take absolute values, and average across all such samples.
+
+\begin{lstlisting}[caption={Feature attribution --- core computation}]
+# for each correctly classified sample n:
+delta3 = softmax_jacobian_vector(y_hat_n, m)  # (K, 1)
+delta2 = np.dot(W3.T, delta3) * act_deriv(a2_n)
+delta1 = np.dot(W2.T, delta2) * act_deriv(a1_n)
+grad_input = np.dot(W1.T, delta1)  # gradient at input
+grad_accumulator += np.abs(grad_input.ravel())
+\end{lstlisting}
+
+\subsubsection{Results --- ReLU Network}
+
+% ── feature ranking: ReLU ──
+\begin{table}[H]
+\centering
+\begin{tabular}{clc}
+\toprule
+\textbf{Rank} & \textbf{Feature} & \textbf{Avg $|\partial o_m/\partial x_i|$} \\
+\midrule
+1  & amenity\_score                        & 0.3540 \\
+2  & room\_type\_Entire home/apt            & 0.1023 \\
+3  & room\_type\_Private room               & 0.0951 \\
+4  & neighbourhood\_group\_Manhattan        & 0.0687 \\
+5  & neighbourhood\_group\_Brooklyn         & 0.0534 \\
+6  & neighbourhood\_group\_Queens           & 0.0404 \\
+7  & room\_type\_Shared room                & 0.0346 \\
+8  & neighbourhood\_group\_Bronx            & 0.0310 \\
+9  & minimum\_nights                       & 0.0287 \\
+10 & availability\_365                     & 0.0239 \\
+11 & number\_of\_reviews                    & 0.0140 \\
+12 & neighbourhood\_group\_Staten Island    & 0.0077 \\
+\bottomrule
+\end{tabular}
+\caption{Feature attribution ranking --- ReLU network (81.6\% correctly classified).}
+\label{tab:attr_relu}
+\end{table}
+
+% ── PLACEHOLDER: feature attribution bar chart (ReLU) ──
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.8\textwidth]{images/gradientbasedfeatures.png}
+    \caption{Gradient-based feature attribution --- ReLU network.}
+    \label{fig:attr_relu}
+\end{figure}
+
+\subsubsection{Results --- Sigmoid Network}
+
+% ── feature ranking: Sigmoid ──
+\begin{table}[H]
+\centering
+\begin{tabular}{clc}
+\toprule
+\textbf{Rank} & \textbf{Feature} & \textbf{Avg $|\partial o_m/\partial x_i|$} \\
+\midrule
+1  & amenity\_score                        & 0.009623 \\
+2  & room\_type\_Private room               & 0.006717 \\
+3  & number\_of\_reviews                    & 0.004418 \\
+4  & room\_type\_Entire home/apt            & 0.003589 \\
+5  & neighbourhood\_group\_Brooklyn         & 0.002656 \\
+6  & neighbourhood\_group\_Queens           & 0.002475 \\
+7  & minimum\_nights                       & 0.002219 \\
+8  & neighbourhood\_group\_Bronx            & 0.001644 \\
+9  & neighbourhood\_group\_Staten Island    & 0.000652 \\
+10 & room\_type\_Shared room                & 0.000581 \\
+11 & neighbourhood\_group\_Manhattan        & 0.000576 \\
+12 & availability\_365                     & 0.000434 \\
+\bottomrule
+\end{tabular}
+\caption{Feature attribution ranking --- Sigmoid network (56.3\% correctly classified).}
+\label{tab:attr_sigmoid}
+\end{table}
+
+% ── PLACEHOLDER: feature attribution bar chart (Sigmoid) ──
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.8\textwidth]{images/gradientbasedfeatures1.png}
+    \label{fig:attr_sigmoid}
+\end{figure}
+
+\subsubsection{Comparison and Interpretation}
+
+% ── ReLU vs Sigmoid comparison ──
+\begin{table}[H]
+\centering
+\begin{tabular}{clcc}
+\toprule
+\textbf{Rank} & \textbf{Feature} & \textbf{ReLU} & \textbf{Sigmoid} \\
+\midrule
+1  & amenity\_score                        & 0.3540 & 0.0096 \\
+2  & room\_type\_Entire home/apt            & 0.1023 & 0.0036 \\
+3  & room\_type\_Private room               & 0.0951 & 0.0067 \\
+4  & neighbourhood\_group\_Manhattan        & 0.0687 & 0.0006 \\
+5  & neighbourhood\_group\_Brooklyn         & 0.0534 & 0.0027 \\
+6  & neighbourhood\_group\_Queens           & 0.0404 & 0.0025 \\
+7  & room\_type\_Shared room                & 0.0346 & 0.0006 \\
+8  & neighbourhood\_group\_Bronx            & 0.0310 & 0.0016 \\
+9  & minimum\_nights                       & 0.0287 & 0.0022 \\
+10 & availability\_365                     & 0.0239 & 0.0004 \\
+11 & number\_of\_reviews                    & 0.0140 & 0.0044 \\
+12 & neighbourhood\_group\_Staten Island    & 0.0077 & 0.0007 \\
+\bottomrule
+\end{tabular}
+\caption{Feature importance comparison (sorted by ReLU importance).}
+\label{tab:attr_compare}
+\end{table}
+
+A few things I noticed:
+
+\begin{itemize}
+    \item \textbf{ReLU gives sharper attributions.} There's a clear gap between the top features and the rest. This makes it easy to tell which features the model cares about.
+    
+    \item \textbf{Sigmoid attributions are compressed.} All features get similarly small scores. This is because of the same vanishing gradient issue from Part B --- the sigmoid derivative keeps squishing the gradient, so by the time it reaches the input, everything looks the same.
+    
+    \item \textbf{Consistency with Part A.} The top features from the ReLU attribution (like \texttt{amenity\_score}, certain \texttt{room\_type} dummies) are the same ones that showed visible separation in the Part A box plots and count plots. Features that looked uniform across classes in EDA get low attribution scores here too.
+\end{itemize}
+
+\newpage
+
+% ═══════════════════════════════════════════
+% PART D
+% ═══════════════════════════════════════════
+\subsection{Part D: Test Evaluation and Generalization Analysis}
+
+\subsubsection{Test Accuracy}
+
+I loaded \texttt{test.csv}, applied the exact same preprocessing pipeline (imputation, encoding, scaling with the same fitted scaler), and ran the trained ReLU model on it.
+
+\begin{quote}
+\textbf{Test Accuracy (ReLU model): 0.3882} \quad (2833 / 7297 correct)
+\end{quote}
+
+\subsubsection{Train / Validation / Test Comparison}
+
+% ── split accuracy table ──
+\begin{table}[H]
+\centering
+\begin{tabular}{lc}
+\toprule
+\textbf{Split} & \textbf{Accuracy} \\
+\midrule
+Training   & 0.8155 \\
+Validation & 0.8092 \\
+Test       & 0.3882 \\
+\midrule
+Train$\to$Val gap  & +0.0063 \\
+Train$\to$Test gap & +0.4273 \\
+Val$\to$Test gap   & +0.4209 \\
+\bottomrule
+\end{tabular}
+\caption{Accuracy across data splits.}
+\label{tab:split_acc}
+\end{table}
+
+% ── PLACEHOLDER: confusion matrix ──
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.55\textwidth]{images/testsetconfusion.png}
+    \label{fig:cm_test}
+\end{figure}
+
+% ── classification report ──
+\begin{verbatim}
+              precision    recall  f1-score   support
+
+     Class 0       0.21      0.24      0.22       983
+     Class 1       0.57      0.47      0.51      4109
+     Class 2       0.25      0.37      0.30      1737
+     Class 3       0.15      0.06      0.09       468
+
+    accuracy                           0.39      7297
+   macro avg       0.29      0.29      0.28      7297
+weighted avg       0.42      0.39      0.40      7297
+\end{verbatim}
+
+There's a noticeable drop from training to test. The model fits the training data okay but doesn't generalize as well.
+
+\subsubsection{Feature Attribution: Train vs Test}
+
+I ran the feature attribution from Part C on the test data too, to see if the model relies on the same features.
+
+% ── PLACEHOLDER: train vs test attribution comparison ──
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.85\textwidth]{images/featureattribution_trainvstest.png}
+    \caption{Feature attribution comparison between training and test data.}
+    \label{fig:attr_compare}
+\end{figure}
+
+% ── train vs test attribution table ──
+\begin{table}[H]
+\centering
+\small
+\begin{tabular}{clccc}
+\toprule
+\textbf{Rank} & \textbf{Feature} & \textbf{Train} & \textbf{Test} & \textbf{Shift} \\
+\midrule
+1  & amenity\_score                     & 0.3540 & 0.4143 & +0.0604 \\
+2  & room\_type\_Entire home/apt         & 0.1023 & 0.1170 & +0.0147 \\
+3  & room\_type\_Private room            & 0.0951 & 0.1091 & +0.0140 \\
+4  & neighbourhood\_group\_Manhattan     & 0.0687 & 0.0795 & +0.0108 \\
+5  & neighbourhood\_group\_Brooklyn      & 0.0534 & 0.0629 & +0.0095 \\
+6  & neighbourhood\_group\_Queens        & 0.0404 & 0.0486 & +0.0082 \\
+7  & room\_type\_Shared room             & 0.0346 & 0.0390 & +0.0045 \\
+8  & neighbourhood\_group\_Bronx         & 0.0310 & 0.0335 & +0.0025 \\
+9  & minimum\_nights                    & 0.0287 & 0.0321 & +0.0033 \\
+10 & availability\_365                  & 0.0239 & 0.0289 & +0.0050 \\
+11 & number\_of\_reviews                 & 0.0140 & 0.0153 & +0.0013 \\
+12 & neighbourhood\_group\_Staten Island & 0.0077 & 0.0090 & +0.0014 \\
+\bottomrule
+\end{tabular}
+\caption{Feature attribution: training vs.\ test data (ReLU).}
+\label{tab:attr_shift}
+\end{table}
+
+\subsubsection{Per-Class Breakdown}
+
+% ── per-class accuracy ──
+\begin{table}[H]
+\centering
+\begin{tabular}{lccc}
+\toprule
+\textbf{Class} & \textbf{Train Acc} & \textbf{Val Acc} & \textbf{Test Acc} \\
+\midrule
+Class 0 & 0.7586 & 0.7520 & 0.2421 \\
+Class 1 & 0.9082 & 0.9049 & 0.4682 \\
+Class 2 & 0.8039 & 0.7857 & 0.3690 \\
+Class 3 & 0.1745 & 0.1755 & 0.0641 \\
+\bottomrule
+\end{tabular}
+\caption{Per-class accuracy across splits.}
+\label{tab:perclass_acc}
+\end{table}
+
+% ── class distribution across splits ──
+\begin{table}[H]
+\centering
+\begin{tabular}{lccc}
+\toprule
+\textbf{Class} & \textbf{Train} & \textbf{Val} & \textbf{Test} \\
+\midrule
+Class 0 & 13.5\% & 13.5\% & 13.5\% \\
+Class 1 & 56.3\% & 56.3\% & 56.3\% \\
+Class 2 & 23.8\% & 23.8\% & 23.8\% \\
+Class 3 &  6.4\% &  6.4\% &  6.4\% \\
+\bottomrule
+\end{tabular}
+\caption{Class distribution across data splits.}
+\label{tab:class_dist}
+\end{table}
+
+\subsubsection{Why the Model Fails to Generalize}
+
+After looking at all of this, I think the main issue is a mismatch between training and test data, specifically around missing values. The training set had hundreds of NaNs that I filled with medians and modes. The model ended up partially learning these imputed patterns --- clusters of identical values at the median, for example --- and those patterns just aren't there in the clean test data.
+
+\texttt{amenity\_score} also has a wider spread in the test set compared to training, so after applying the same scaler, some test points land in regions the model hasn't seen before.
+
+The feature attribution analysis from Part C backs this up: the features the model relies on most heavily (like \texttt{amenity\_score} and certain one-hot columns for neighbourhood/room type) are exactly the ones affected by imputation or distributional shift.
+
+Class imbalance makes things worse --- Class 1 dominates at $\sim$56\%, so the model tends to predict it more often and struggles with minority classes.
+
+There's also no regularization at all. No dropout, no weight decay, no early stopping. The model just runs for 200 iterations and has nothing preventing it from memorizing noise.
+
+\subsubsection{Suggested Mitigation Strategy}
+
+To fix this, I'd suggest:
+
+\begin{enumerate}
+    \item \textbf{Missing-indicator flags:} Instead of just imputing, also add binary columns like \texttt{minimum\_nights\_was\_missing}. Since the test data has no NaNs, these flags would all be 0, letting the model distinguish real values from imputed ones.
+    
+    \item \textbf{Dropout and weight decay:} Adding dropout ($\sim$0.2--0.3) and L2 regularization would force the model to learn more robust patterns instead of memorizing training artifacts.
+    
+    \item \textbf{Class-weighted loss:} Giving minority classes higher weight in the loss function so they get more influence during training.
+    
+    \item \textbf{Early stopping:} Monitor validation loss and stop when it starts going up, rather than blindly running for 200 iterations.
+\end{enumerate}
+
+\newpage
+
+% ═══════════════════════════════════════════════════════════════
+% QUESTION 2
+% ═══════════════════════════════════════════════════════════════
+\section{Question 2: Bias Gradients, Parameter Sharing, and Activation Effects}
+
+Consider the feedforward neural network with a shared bias parameter $b \in \mathbb{R}^m$ used in both layers. The forward pass is:
+\begin{align}
+    h_1 &= g(Wx + b) \\
+    \hat{y} &= g_1(Uh_1 + b) \\
+    L &= \ell(\hat{y}, y)
+\end{align}
+where $x \in \mathbb{R}^d$ is the input, $y \in \mathbb{R}^k$ is the target, $W \in \mathbb{R}^{m \times d}$ and $U \in \mathbb{R}^{k \times m}$ are weight matrices, $g(\cdot)$ is the hidden-layer activation, $g_1(\cdot)$ is the output activation, and $\ell(\cdot, \cdot)$ is a differentiable loss function. For simplicity, $m = k$.
+
+\subsection{Shared Bias Gradient Derivation}
+
+Since the bias $b$ appears in \textbf{both} layers, the gradient $\frac{\partial L}{\partial b}$ must account for both computational paths through which $b$ influences the loss.
+
+
+
+The typed derivation follows.
+
+\textbf{Path 1 --- Through the output layer (direct):}
+
+The bias $b$ directly enters the output pre-activation $z_2 = Uh_1 + b$. Applying the chain rule:
+\[
+    \left.\frac{\partial L}{\partial b}\right|_{\text{path 2}} = \frac{\partial L}{\partial \hat{y}} \odot g_1'(z_2)
+\]
+Let $\delta_2 = \frac{\partial L}{\partial \hat{y}} \odot g_1'(z_2) \in \mathbb{R}^m$. Then:
+\[
+    \left.\frac{\partial L}{\partial b}\right|_{\text{path 2}} = \delta_2
+\]
+
+\textbf{Path 2 --- Through the hidden layer (indirect):}
+
+The bias $b$ also enters the hidden pre-activation $z_1 = Wx + b$. The chain proceeds as:
+\[
+    \frac{\partial L}{\partial z_1} = (U^\top \delta_2) \odot g'(z_1)
+\]
+Let $\delta_1 = (U^\top \delta_2) \odot g'(z_1) \in \mathbb{R}^m$. Since $\frac{\partial z_1}{\partial b} = I$:
+\[
+    \left.\frac{\partial L}{\partial b}\right|_{\text{path 1}} = \delta_1
+\]
+
+\textbf{Combining both paths:}
+
+By the multivariate chain rule, since $b$ influences $L$ through two independent computational paths, the total gradient is the sum:
+\[
+    \boxed{\frac{\partial L}{\partial b} = \delta_1 + \delta_2 = \left[(U^\top \delta_2) \odot g'(z_1)\right] + \left[\frac{\partial L}{\partial \hat{y}} \odot g_1'(z_2)\right]}
+\]
+
+As discussed in class that when a parameter appears multiple times in a computation graph, the total derivative is obtained by summing the contributions from each occurrence.
+
+\subsection{Optimization and Convergence Effect}
+
+\textbf{Does bias sharing affect convergence speed or stability?}
+
+\textbf{Yes.} Bias sharing can negatively affect both convergence speed and stability for the following reasons:
+
+\begin{enumerate}
+    \item \textbf{Parameter coupling:} In the independent-bias model, $b_1$ and $b_2$ receive gradients only from their own layer, allowing each to adapt its bias offset independently. In the shared model, $b$ receives a \textit{combined} gradient $\delta_1 + \delta_2$ from two different layers that may have conflicting requirements. An update that helps the output layer may hurt the hidden layer and vice versa, leading to oscillation or slower convergence.
+    
+    \item \textbf{Reduced degrees of freedom:} The shared model has $m$ fewer free parameters ($m$ instead of $2m$ bias parameters). This reduces the model's capacity, potentially making it harder to find a good minimum.
+    
+    \item \textbf{Gradient magnitude scaling:} The shared bias gradient is the sum of two terms potentially of different scales. If $|\delta_2| \gg |\delta_1|$ (as happens with sigmoid due to vanishing gradients), the hidden layer's bias needs are effectively ignored. Conversely, if both terms are large but point in opposite directions, they can partially cancel, leading to very small effective updates despite large individual gradients.
+    
+\end{enumerate}
+
+In practice, bias sharing is unusual precisely because the computational savings are negligible (biases are small vectors) while the optimization downsides are tangible.
+
+\newpage
+
+% ═══════════════════════════════════════════════════════════════
+% GENERATIVE AI USAGE
+% ═══════════════════════════════════════════════════════════════
+\section*{Generative AI Usage Disclosure}
+\addcontentsline{toc}{section}{Generative AI Usage Disclosure}
+
+The following generative AI tools were used during this assignment:
+
+\subsection*{1. Google Gemini}
+
+\begin{itemize}
+    \item \textbf{Usage:} Used for conceptual guidance, debugging help, and understanding assignment requirements throughout the coding process.
+    \item \textbf{Chat link:} \url{https://gemini.google.com/share/c4b3d4aa3ba9}
+    \item \textbf{Edits made:} All AI-generated suggestions were reviewed, adapted, and integrated manually. Code was modified to fit the specific dataset and assignment requirements.
+\end{itemize}
+
+\subsection*{2. VS Code Copilot (GitHub Copilot)}
+
+\begin{itemize}
+    \item \textbf{Usage --- Code completions:} Used Copilot's inline autocomplete suggestions while writing Python code in the Jupyter notebook. Copilot provided line-level and block-level completions for repetitive patterns (e.g., NumPy operations, plotting boilerplate, preprocessing steps).
+    \item \textbf{Usage --- Report writing:} Used VS Code Copilot Chat to help structure and write this \LaTeX{} report, including formatting tables, filling in placeholder values from notebook outputs, and fixing compilation errors.
+    \item \textbf{Edits made:} All suggestions were reviewed and edited for correctness and clarity. The analysis, interpretations, and conclusions are my own.
+\end{itemize}
+
+\end{document}

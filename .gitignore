@@ -19,12 +19,26 @@ __pycache__/
 .ipynb_checkpoints
 */.ipynb_checkpoints/*
 
-# --- Datasets ---
-# It is best practice NOT to upload large datasets to GitHub
-# (You should document where to download them in your README)
-*.csv
-*.zip
+
 
 # --- OS Generated Files ---
 .DS_Store
 Thumbs.db
+
+# --- Images ---
+images/
+
+# --- LaTeX auxiliary files ---
+*.aux
+*.log
+*.out
+*.toc
+*.fls
+*.fdb_latexmk
+*.synctex.gz
+*.synctex(busy)
+*.bbl
+*.blg
+*.nav
+*.snm
+*.vrb
