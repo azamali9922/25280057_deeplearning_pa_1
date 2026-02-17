@@ -75,7 +75,7 @@
 
 \subsubsection{Dataset Overview}
 
-The dataset we're working with is a listing-level dataset where the goal is to predict the \texttt{price\_class} (a multi-class label). I started by just loading the CSV and checking what we have.
+I worked with a listing-level dataset where the goal is to predict \texttt{price\_class} (a multi-class label). I started by loading the CSV and inspecting the schema.
 
 \begin{lstlisting}[caption={Loading the data}]
 data = pd.read_csv('train.csv')
@@ -103,7 +103,7 @@ The dataset has both numerical features (\texttt{minimum\_nights}, \texttt{ameni
 
 \subsubsection{Missing Values}
 
-One of the first things I noticed is that the training data has quite a few missing values. Here's the breakdown:
+One of the first things I noticed is that the training data has quite a few missing values. Below is the breakdown:
 
 % ── null counts output ──
 \begin{verbatim}
@@ -117,11 +117,11 @@ price_class               0
 Total missing:         5406
 \end{verbatim}
 
-The key columns with missing data are \texttt{neighbourhood\_group} ($\sim$800 nulls), \texttt{room\_type} ($\sim$600 nulls), \texttt{minimum\_nights} ($\sim$1300 nulls), and \texttt{amenity\_score} ($\sim$900 nulls). This turns out to be very important later when we get to Part D.
+The key columns with missing data are \texttt{neighbourhood\_group} ($\sim$800 nulls), \texttt{room\_type} ($\sim$600 nulls), \texttt{minimum\_nights} ($\sim$1300 nulls), and \texttt{amenity\_score} ($\sim$900 nulls). This becomes important again in Part D when I look at generalization.
 
 \subsubsection{Handling Missing Values}
 
-I filled in the missing values using the following strategies:
+I handled the missing values using the following strategies:
 
 \begin{itemize}
     \item \textbf{\texttt{neighbourhood\_group}}: filled with the overall mode (most frequent category).
@@ -163,7 +163,7 @@ Class 0     5567    13.46%
 Class 3     2650     6.41%
 \end{verbatim}
 
-Class 1 dominates at around 56\%, while Class 3 only has about 6\% of the samples. This kind of imbalance can cause the model to just predict Class 1 most of the time and still get decent accuracy.
+Class 1 dominates at around 56\%, while Class 3 only has about 6\% of the samples. With this kind of imbalance, a naive model can get a deceptively high accuracy by over-predicting Class 1.
 
 \subsubsection{Feature Analysis}
 
@@ -221,8 +221,7 @@ data_encoded[num_cols] = scaler.fit_transform(data_encoded[num_cols])
 \end{lstlisting}
 
 After encoding, the feature matrix has shape:
-
-After encoding, the feature matrix has shape \texttt{(41348, 13)} --- 41,348 samples with 13 features (4~numeric + 5~neighbourhood\_group dummies + 4~room\_type dummies).
+\texttt{(41348, 13)} --- 41,348 samples with 13 features (4 numeric + 5 \texttt{neighbourhood\_group} dummies + 4 \texttt{room\_type} dummies).
 
 \subsubsection{Correlation Matrix}
 
@@ -245,7 +244,7 @@ Most features don't have strong correlations with each other, which is fine --- 
 
 \subsubsection{Architecture}
 
-I implemented a feedforward neural network with two hidden layers using only NumPy. The architecture is:
+I implemented a feedforward neural network with two hidden layers (an MLP) using only NumPy. The architecture is:
 
 \begin{itemize}
     \item \textbf{Input layer}: $M_0$ features (determined by encoded data)
@@ -281,7 +280,7 @@ And the weight gradients:
     \frac{\partial L}{\partial b_l} = \frac{1}{N} \sum_n \delta^{(l)}_n
 \end{align}
 
-Weights are initialized with small random values ($\times 0.1$) and biases are set to zero. I used batch gradient descent with a learning rate of 0.1 for 200 iterations.
+Weights are initialized with small random values (scaled by 0.1) and biases are set to zero. I used batch gradient descent with a learning rate of 0.1 for 200 iterations.
 
 \subsubsection{Training Code}
 
@@ -413,8 +412,7 @@ This is basically the same recursive formula, applied one more time. In normal b
     \centering
     \includegraphics[width=0.8\textwidth]{images/partc-a1.jpeg}
     \caption{Handwritten derivation of input gradients.}
-
-  
+    \label{fig:hand_derivation_input_grads}
 \end{figure}
 
 \subsubsection{Pseudocode for Feature Attribution}
@@ -430,7 +428,7 @@ This is basically the same recursive formula, applied one more time. In normal b
 
 \subsubsection{Why Gradient Magnitude Measures Feature Importance}
 
-The intuition is pretty simple. If $\left|\frac{\partial L}{\partial x_i}\right|$ is large for some feature $x_i$, that means a tiny perturbation in $x_i$ would cause a big change in the loss. The model is ``paying attention'' to that feature --- its predictions are sensitive to it. On the other hand, if the gradient is close to zero, the model doesn't really care about that feature; changing it barely affects the output.
+Intuitively, if $\left|\frac{\partial L}{\partial x_i}\right|$ is large for some feature $x_i$, then a small change in $x_i$ would cause a noticeable change in the loss. In other words, the model is ``paying attention'' to that feature. On the other hand, if the gradient is close to zero, the model is relatively insensitive to that input, so changing it has little effect on the output.
 
 From an optimization standpoint, gradient descent updates parameters proportionally to the gradient. So features with large gradients are the ones actively driving learning, making them more important for the model's decisions.
 
