@@ -156,4 +156,3 @@ jupyter notebook part1.ipynb
 
 ---
 
-<p align="center"><i>Built with ❤️, NumPy, and way too many gradient calculations</i></p>
